@@ -20,17 +20,18 @@ const sequelize = new Sequelize(db, db_username, db_password, {
       rejectUnauthorized: false,
     },
   },
+  logging: false,
 });
 
-const testConnection = async (res) => {
-  try {
-    await sequelize.authenticate();
-    console.log("Connection with databse has been established successfully.");
-  } catch (error) {
-    console.error("Unable to connect to the database:", error);
-  }
-};
+// const testConnection = async (res) => {
+//   try {
+//     await sequelize.authenticate();
+//     console.log("Connection with database has been established successfully.");
+//   } catch (error) {
+//     console.error("Unable to connect to the database:", error);
+//   }
+// };
 
-testConnection();
+// testConnection();
 
 module.exports = sequelize;

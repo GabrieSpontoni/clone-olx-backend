@@ -54,79 +54,115 @@ const addAction = async (req, res) => {
       },
     });
 
-    const promises = [];
-    let uuid = UUID();
+    if (user) {
+      const promises = [];
+      let uuid = UUID();
 
-    files["images"].forEach((file) => {
-      promises.push(
-        new Promise(async (resolve, reject) => {
-          await firebase
-            .storage()
-            .bucket()
-            .upload(file.path, {
-              contentType: file.type,
-              destination: `fotos/${file.name}`,
-              metadata: {
+      files["images"].forEach((file) => {
+        promises.push(
+          new Promise(async (resolve, reject) => {
+            await firebase
+              .storage()
+              .bucket()
+              .upload(file.path, {
+                contentType: file.type,
+                destination: `fotos/${file.name}`,
                 metadata: {
-                  firebaseStorageDownloadTokens: uuid,
+                  metadata: {
+                    firebaseStorageDownloadTokens: uuid,
+                  },
                 },
-              },
-            })
-            .then((result) => {
-              const downloadUrl =
-                "https://firebasestorage.googleapis.com/v0/b/projeto-test-functions.appspot.com/o/" +
-                encodeURIComponent(result[0].name) +
-                "?alt=media&token=" +
-                uuid;
+              })
+              .then((result) => {
+                const downloadUrl =
+                  "https://firebasestorage.googleapis.com/v0/b/projeto-test-functions.appspot.com/o/" +
+                  encodeURIComponent(result[0].name) +
+                  "?alt=media&token=" +
+                  uuid;
 
-              resolve({ fileInfo: result[0].metadata, downloadUrl });
-            })
-            .catch((err) => {
-              reject(err);
-            });
-        })
-      );
-    });
-
-    const images = await Promise.all(promises);
-
-    await Ad.create({
-      userId: user.dataValues.id,
-      stateId,
-      categoryId,
-      images,
-      title,
-      price,
-      priceNegotiable,
-      description,
-    })
-      .then(async (result) => {
-        images.forEach(async (image) => {
-          await AdAttachment.create({
-            adId: result.dataValues.id,
-            image: image.downloadUrl,
+                resolve({ fileInfo: result[0].metadata, downloadUrl });
+              })
+              .catch((err) => {
+                reject(err);
+              });
           })
-            .then(async (result) => {})
-            .catch((err) => {
-              console.log(err);
-            });
-        });
-        res.status(200).json({ message: "Ad created" });
-      })
-      .catch((err) => {
-        console.log(err);
-        return res.status(500).json({ message: err });
+        );
       });
+
+      const images = await Promise.all(promises);
+
+      await Ad.create({
+        userId: user.dataValues.id,
+        stateId,
+        categoryId,
+        images,
+        title,
+        price,
+        priceNegotiable,
+        description,
+      })
+        .then(async (result) => {
+          images.forEach(async (image) => {
+            await AdAttachment.create({
+              adId: result.dataValues.id,
+              image: image.downloadUrl,
+            })
+              .then(async (result) => {})
+              .catch((err) => {
+                console.log(err);
+              });
+          });
+          res.status(200).json({ message: "Ad created" });
+        })
+        .catch((err) => {
+          console.log(err);
+          return res.status(500).json({ message: err });
+        });
+    }
   });
 };
 
 const getList = async (req, res) => {
+  const {
+    sort = "asc",
+    offset = 0,
+    limit = 8,
+    q,
+    categoryId,
+    state,
+  } = req.query;
+
+  let stateId;
+
+  if (state) {
+    await State.findOne({
+      where: {
+        name: state.replace(/(^\w{1})|(\s+\w{1})/g, (letter) =>
+          letter.toUpperCase()
+        ),
+      },
+    })
+      .then((result) => {
+        if (result) {
+          stateId = result.dataValues.id;
+        }
+      })
+      .catch((err) => {
+        console.log(err);
+      });
+  }
+
   await Ad.findAll({
-    // where: {
-    //   title: {
-    //     [Op.like]: "%" + "testee" + "%",
-    //   },
-    // },
+    where: {
+      status: "true",
+      title: q ? { [Op.like]: `%${q}%` } : { [Op.ne]: null },
+      categoryId: categoryId ? categoryId : { [Op.ne]: null },
+      stateId: stateId ? stateId : { [Op.ne]: null },
+    },
+    order: [["id", sort]],
+    offset: parseInt(offset),
+    limit: parseInt(limit),
+
     include: [
       {
         model: User,
